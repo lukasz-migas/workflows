@@ -94,6 +94,11 @@ on:
         description: >
           (true or false). Whether to create a GitHub issue when a test fails.
           If not set, will be true for scheduled runs, and false otherwise.
+      debug-failures:
+        required: false
+        type: string
+        description: >
+          (true or false). Whether to enable interactive debugging of actions.
       cache-key:
         required: false
         type: string
@@ -133,6 +138,7 @@ jobs:
       USE_CACHE: ${{ inputs.cache-key != '' && inputs.cache-path != '' && 'true' || 'false' }}
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       REPORT_FAIL: ${{ inputs.report-failures && inputs.report-failures || (github.event_name == 'schedule' && 'true' || 'false')}}
+      DEBUG_FAIL: ${{ inputs.debug-failures && inputs.debug-failures || (github.event_name != 'schedule' && 'true' || 'false')}}
     steps:
       - name: Checkout ${{ github.repository }}
         uses: actions/checkout@v4
@@ -198,13 +204,21 @@ jobs:
 
       - name: Run tests
         if: ${{ inputs.qt == '' }}
+        env:
+          PYTHONFAULTHANDLER: 1
         run: coverage run -p -m pytest --color=yes ${{ inputs.pytest-args }}
 
       - name: Run tests (headless)
         if: ${{ inputs.qt != '' }}
         uses: aganders3/headless-gui@v2
+        env:
+          PYTHONFAULTHANDLER: 1
         with:
           run: coverage run -p -m pytest --color=yes ${{ inputs.pytest-args }}
+
+      - name: Setup tmate session
+        if: ${{ failure() && env.DEBUG_FAIL == 'true'}}
+        uses: mxschmitt/action-tmate@v2
 
       - name: Report failure
         if: ${{ failure() && env.REPORT_FAIL == 'true'}}
